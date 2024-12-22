@@ -23,6 +23,55 @@ function createTriggers() {
 /******/ 	"use strict";
 /******/ 	var __webpack_modules__ = ({
 
+/***/ "./dist/constants.js":
+/*!***************************!*\
+  !*** ./dist/constants.js ***!
+  \***************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   DEFAULT_SCHEMA: () => (/* binding */ DEFAULT_SCHEMA)
+/* harmony export */ });
+const DEFAULT_SCHEMA = [
+    'Id',
+    'Symbol',
+    'Name',
+    'Image',
+    'Current Price',
+    'Market Cap',
+    'Market Cap Rank',
+    'Fully Diluted Valuation',
+    'Total Volume',
+    'High 24h',
+    'Low 24h',
+    'Price Change 24h',
+    'Price Change Percentage 24h',
+    'Market Cap Change 24h',
+    'Market Cap Change Percentage 24h',
+    'Circulating Supply',
+    'Total Supply',
+    'Max Supply',
+    'Ath',
+    'Ath Change Percentage',
+    'Ath Date',
+    'Atl',
+    'Atl Change Percentage',
+    'Atl Date',
+    'Roi',
+    'Last Updated',
+    'Price Change Percentage 1h In Currency',
+    'Price Change Percentage 24h In Currency',
+    'Price Change Percentage 30d In Currency',
+    'Price Change Percentage 7d In Currency',
+    'Roi Times',
+    'Roi Currency',
+    'Roi Percentage',
+];
+
+
+/***/ }),
+
 /***/ "./dist/discord.js":
 /*!*************************!*\
   !*** ./dist/discord.js ***!
@@ -785,10 +834,12 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   storeRows2Sheet: () => (/* binding */ storeRows2Sheet),
 /* harmony export */   updateCurrencyFormat: () => (/* binding */ updateCurrencyFormat)
 /* harmony export */ });
-/* harmony import */ var _importjson__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./importjson */ "./dist/importjson.js");
+/* harmony import */ var _constants__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./constants */ "./dist/constants.js");
+/* harmony import */ var _importjson__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./importjson */ "./dist/importjson.js");
 /**
  * @OnlyCurrentDoc
  */
+
 
 function sortBy(arr, key, desc = true) {
     return desc
@@ -866,84 +917,75 @@ function formatNumber(input, options = {}) {
     }
     return localizedValue + suffix;
 }
-function safeGuardImportJSON(urls = [], sheetName = '', per_page = 250) {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+function getOrCreateSheet(ss, sheetName) {
     let sheet = ss.getSheetByName(sheetName);
-    if (sheet === null) {
-        sheet = ss.insertSheet();
+    if (!sheet) {
+        sheet = ss.insertSheet(sheetName);
     }
-    let counting_success = 0;
-    urls.forEach(function (url, i) {
-        let status = false;
-        let counting = 0;
-        while (!status && counting < 3) {
-            try {
-                let dataAll = (0,_importjson__WEBPACK_IMPORTED_MODULE_0__.ImportJSON)(url, undefined, 'noTruncate');
-                console.log(url);
-                if (!('error' in dataAll)) {
-                    // console.log(dataAll);
-                    status = true;
-                    counting_success += 1;
-                    const schema = [
-                        'Id',
-                        'Symbol',
-                        'Name',
-                        'Image',
-                        'Current Price',
-                        'Market Cap',
-                        'Market Cap Rank',
-                        'Fully Diluted Valuation',
-                        'Total Volume',
-                        'High 24h',
-                        'Low 24h',
-                        'Price Change 24h',
-                        'Price Change Percentage 24h',
-                        'Market Cap Change 24h',
-                        'Market Cap Change Percentage 24h',
-                        'Circulating Supply',
-                        'Total Supply',
-                        'Max Supply',
-                        'Ath',
-                        'Ath Change Percentage',
-                        'Ath Date',
-                        'Atl',
-                        'Atl Change Percentage',
-                        'Atl Date',
-                        'Roi',
-                        'Last Updated',
-                        'Price Change Percentage 1h In Currency',
-                        'Price Change Percentage 24h In Currency',
-                        'Price Change Percentage 30d In Currency',
-                        'Price Change Percentage 7d In Currency',
-                        'Roi Times',
-                        'Roi Currency',
-                        'Roi Percentage',
-                    ];
-                    const header = dataAll[0];
-                    console.log(dataAll);
-                    if (JSON.stringify(schema) != JSON.stringify(header)) {
-                        const sortarray = header.map((h) => schema.indexOf(h));
-                        dataAll = dataAll.map(function (row) {
-                            return sortarray.map((index) => row[index]);
-                        });
-                    }
-                    if (i > 0) {
-                        dataAll = dataAll.slice(1);
-                    }
-                    sheet
-                        .getRange(1 + i * per_page + (i > 0 ? 1 : 0), 1, dataAll.length, dataAll[0].length)
-                        .setValues(dataAll);
-                }
-                break;
+    return sheet;
+}
+function fetchJSONData(url) {
+    const data = (0,_importjson__WEBPACK_IMPORTED_MODULE_1__.ImportJSON)(url, undefined, 'noTruncate');
+    if (data && !data.error) {
+        return data;
+    }
+    console.error(data?.error);
+    return null;
+}
+function processJSONData(data, index) {
+    const header = data[0];
+    if (!areHeadersValid(header)) {
+        const columnOrder = header.map((h) => _constants__WEBPACK_IMPORTED_MODULE_0__.DEFAULT_SCHEMA.indexOf(h));
+        data = reorderColumns(data, columnOrder);
+    }
+    // Skip the header for all but the first URL
+    return index > 0 ? data.slice(1) : data;
+}
+function areHeadersValid(header) {
+    return JSON.stringify(header) === JSON.stringify(_constants__WEBPACK_IMPORTED_MODULE_0__.DEFAULT_SCHEMA);
+}
+function reorderColumns(data, columnOrder) {
+    return data.map((row) => columnOrder.map((index) => row[index]));
+}
+function writeDataToSheet(sheet, data, index, rowsPerPage) {
+    const startRow = 1 + index * rowsPerPage + (index > 0 ? 1 : 0);
+    const range = sheet.getRange(startRow, 1, data.length, data[0].length);
+    range.setValues(data);
+}
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 1500;
+function importDataWithRetries(sheet, url, index, rowsPerPage) {
+    const attemptImport = (attempt) => {
+        if (attempt >= MAX_RETRIES)
+            return false;
+        try {
+            const rawData = fetchJSONData(url);
+            if (!rawData) {
+                console.error(`Failed to fetch valid data from URL: ${url}`);
+                return false;
             }
-            catch (e) {
-                console.log(e);
-            }
-            counting++;
-            Utilities.sleep(1500);
+            const data = processJSONData(rawData, index);
+            writeDataToSheet(sheet, data, index, rowsPerPage);
+            return true;
+        }
+        catch (error) {
+            console.error(`Attempt ${attempt + 1} failed for URL: ${url}`, error);
+            Utilities.sleep(RETRY_DELAY_MS);
+            return attemptImport(attempt + 1);
+        }
+    };
+    return attemptImport(0);
+}
+function safeGuardImportJSON(urls = [], sheetName = '', rowsPerPage = 250) {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = getOrCreateSheet(ss, sheetName);
+    let successfulImports = 0;
+    urls.forEach((url, index) => {
+        if (importDataWithRetries(sheet, url, index, rowsPerPage)) {
+            successfulImports++;
         }
     });
-    return counting_success;
+    return successfulImports;
 }
 function getLocalNow(tz = SpreadsheetApp.getActive().getSpreadsheetTimeZone(), format = 'dd/MM/yyyy') {
     return Utilities.formatDate(new Date(), tz, format);
@@ -1179,17 +1221,6 @@ function cgDataRefresh() {
     const count = (0,_lib__WEBPACK_IMPORTED_MODULE_1__.safeGuardImportJSON)(urls, 'db_coingecko_2');
     return count;
 }
-// todo: remove this
-// function cgDataRefresh() {
-//   var currency = SpreadsheetApp.getActiveSpreadsheet().getRangeByName("fiat_currency").getValue();
-//   if (!(currency)) { currency = "cad" }
-//   var urls = [
-//     `https://api.coingecko.com/api/v3/coins/markets?vs_currency=${currency}&order=market_cap_desc&sparkline=false&price_change_percentage=1h%2C24h%2C7d%2C30d`,
-//     `https://api.coingecko.com/api/v3/coins/markets?vs_currency=${currency}&order=market_cap_desc&sparkline=false&price_change_percentage=1h%2C24h%2C7d%2C30d`
-//   ];
-//   var count = safeGuardImportJSON(urls, "db_coingecko");
-//   return count;
-// }
 function cgDataManualRefresh() {
     cgDataRefresh();
     const ui = SpreadsheetApp.getUi();

@@ -1,6 +1,6 @@
 type IncludeFunc = (query: string[], path: string, options: string) => boolean;
 type TransformFunc = (
-  data: Data,
+  data: DataRange,
   row: number,
   column: number,
   options: any,

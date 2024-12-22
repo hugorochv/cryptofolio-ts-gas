@@ -2,7 +2,8 @@
  * @OnlyCurrentDoc
  */
 
-import { DataRange, ImportJSON } from './importjson';
+import { DEFAULT_SCHEMA } from './constants';
+import { Cell, DataRange, ImportJSON } from './importjson';
 
 export function sortBy(arr: any[], key: string, desc = true) {
   return desc
@@ -118,104 +119,109 @@ export function formatNumber(
   return localizedValue + suffix;
 }
 
+function getOrCreateSheet(
+  ss: GoogleAppsScript.Spreadsheet.Spreadsheet,
+  sheetName: string,
+) {
+  let sheet = ss.getSheetByName(sheetName);
+
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+  }
+
+  return sheet;
+}
+
+function fetchJSONData(url: string) {
+  const data = ImportJSON(url, undefined, 'noTruncate');
+  if (data && !(data as unknown as any).error) {
+    return data;
+  }
+
+  console.error((data as unknown as any)?.error);
+  return null;
+}
+
+function processJSONData(data: DataRange, index: number) {
+  const header = data[0];
+
+  if (!areHeadersValid(header)) {
+    const columnOrder = header.map((h) => DEFAULT_SCHEMA.indexOf(h as string));
+    data = reorderColumns(data, columnOrder);
+  }
+
+  // Skip the header for all but the first URL
+  return index > 0 ? data.slice(1) : data;
+}
+
+function areHeadersValid(header: Cell[]) {
+  return JSON.stringify(header) === JSON.stringify(DEFAULT_SCHEMA);
+}
+
+function reorderColumns(data: DataRange, columnOrder: number[]) {
+  return data.map((row) => columnOrder.map((index) => row[index]));
+}
+
+function writeDataToSheet(
+  sheet: GoogleAppsScript.Spreadsheet.Sheet,
+  data: DataRange,
+  index: number,
+  rowsPerPage: number,
+) {
+  const startRow = 1 + index * rowsPerPage + (index > 0 ? 1 : 0);
+  const range = sheet.getRange(startRow, 1, data.length, data[0].length);
+  range.setValues(data);
+}
+
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 1500;
+
+function importDataWithRetries(
+  sheet: GoogleAppsScript.Spreadsheet.Sheet,
+  url: string,
+  index: number,
+  rowsPerPage: number,
+) {
+  const attemptImport = (attempt: number) => {
+    if (attempt >= MAX_RETRIES) return false;
+
+    try {
+      const rawData = fetchJSONData(url);
+      if (!rawData) {
+        console.error(`Failed to fetch valid data from URL: ${url}`);
+        return false;
+      }
+
+      const data = processJSONData(rawData, index);
+      writeDataToSheet(sheet, data, index, rowsPerPage);
+      return true;
+    } catch (error) {
+      console.error(`Attempt ${attempt + 1} failed for URL: ${url}`, error);
+      Utilities.sleep(RETRY_DELAY_MS);
+      return attemptImport(attempt + 1);
+    }
+  };
+
+  return attemptImport(0);
+}
+
 export function safeGuardImportJSON(
   urls: string[] = [],
   sheetName = '',
-  per_page = 250,
+  rowsPerPage = 250,
 ) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName(sheetName);
+  const sheet = getOrCreateSheet(ss, sheetName);
 
-  if (sheet === null) {
-    sheet = ss.insertSheet();
-  }
+  let successfulImports = 0;
 
-  let counting_success = 0;
-
-  urls.forEach(function (url, i) {
-    let status = false;
-    let counting = 0;
-
-    while (!status && counting < 3) {
-      try {
-        let dataAll = ImportJSON(url, undefined, 'noTruncate');
-        console.log(url);
-
-        if (!('error' in dataAll)) {
-          // console.log(dataAll);
-
-          status = true;
-          counting_success += 1;
-
-          const schema = [
-            'Id',
-            'Symbol',
-            'Name',
-            'Image',
-            'Current Price',
-            'Market Cap',
-            'Market Cap Rank',
-            'Fully Diluted Valuation',
-            'Total Volume',
-            'High 24h',
-            'Low 24h',
-            'Price Change 24h',
-            'Price Change Percentage 24h',
-            'Market Cap Change 24h',
-            'Market Cap Change Percentage 24h',
-            'Circulating Supply',
-            'Total Supply',
-            'Max Supply',
-            'Ath',
-            'Ath Change Percentage',
-            'Ath Date',
-            'Atl',
-            'Atl Change Percentage',
-            'Atl Date',
-            'Roi',
-            'Last Updated',
-            'Price Change Percentage 1h In Currency',
-            'Price Change Percentage 24h In Currency',
-            'Price Change Percentage 30d In Currency',
-            'Price Change Percentage 7d In Currency',
-            'Roi Times',
-            'Roi Currency',
-            'Roi Percentage',
-          ];
-
-          const header = dataAll[0];
-
-          console.log(dataAll);
-
-          if (JSON.stringify(schema) != JSON.stringify(header)) {
-            const sortarray = header.map((h) => schema.indexOf(h as any));
-            dataAll = dataAll.map(function (row) {
-              return sortarray.map((index) => row[index]);
-            });
-          }
-          if (i > 0) {
-            dataAll = dataAll.slice(1);
-          }
-
-          sheet
-            .getRange(
-              1 + i * per_page + (i > 0 ? 1 : 0),
-              1,
-              dataAll.length,
-              dataAll[0].length,
-            )
-            .setValues(dataAll);
-        }
-        break;
-      } catch (e: any) {
-        console.log(e);
-      }
-
-      counting++;
-      Utilities.sleep(1500);
+  urls.forEach((url, index) => {
+    if (importDataWithRetries(sheet, url, index, rowsPerPage)) {
+      successfulImports++;
     }
   });
-  return counting_success;
+
+  return successfulImports;
 }
 
 function getLocalNow(

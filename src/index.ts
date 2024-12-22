@@ -145,22 +145,6 @@ function cgDataRefresh() {
   return count;
 }
 
-// todo: remove this
-// function cgDataRefresh() {
-
-//   var currency = SpreadsheetApp.getActiveSpreadsheet().getRangeByName("fiat_currency").getValue();
-//   if (!(currency)) { currency = "cad" }
-
-//   var urls = [
-//     `https://api.coingecko.com/api/v3/coins/markets?vs_currency=${currency}&order=market_cap_desc&sparkline=false&price_change_percentage=1h%2C24h%2C7d%2C30d`,
-//     `https://api.coingecko.com/api/v3/coins/markets?vs_currency=${currency}&order=market_cap_desc&sparkline=false&price_change_percentage=1h%2C24h%2C7d%2C30d`
-//   ];
-
-//   var count = safeGuardImportJSON(urls, "db_coingecko");
-//   return count;
-
-// }
-
 function cgDataManualRefresh() {
   cgDataRefresh();
 
