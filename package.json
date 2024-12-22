@@ -1,0 +1,33 @@
+{
+  "name": "cryptofolio",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "clasp": "clasp",
+    "clasp:login": "pnpm clasp login",
+    "build": "rm -rf dist && tsc && webpack",
+    "push": "pnpm build && clasp push -f",
+    "deploy": "pnpm push && pnpm clasp deploy",
+    "open": "pnpm clasp open",
+    "lint": "eslint 'src/**/*.{js,ts}'",
+    "lint:fix": "eslint --fix 'src/**/*.{js,ts}'",
+    "format": "prettier --check 'src/**/*.{js,ts,json,md}'",
+    "format:fix": "prettier --write 'src/**/*.{js,ts,json,md}'"
+  },
+  "license": "ISC",
+  "devDependencies": {
+    "@google/clasp": "^2.4.2",
+    "@types/google-apps-script": "^1.0.85",
+    "@typescript-eslint/eslint-plugin": "^8.15.0",
+    "@typescript-eslint/parser": "^8.15.0",
+    "eslint": "^9.15.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.2.1",
+    "gas-webpack-plugin": "^2.6.0",
+    "globals": "^15.12.0",
+    "prettier": "^3.3.3",
+    "typescript": "^5.7.2",
+    "webpack": "^5.97.1",
+    "webpack-cli": "^6.0.1"
+  }
+}
