@@ -141,15 +141,15 @@ function cgDataRefresh() {
     `https://us-central1-cryptofolio-428823.cloudfunctions.net/cryptofolio-get-coins`,
   ];
 
-  const count = safeGuardImportJSON(urls, 'db_coingecko_2');
+  const count = safeGuardImportJSON(urls, 'db_coingecko');
   return count;
 }
 
 function cgDataManualRefresh() {
-  cgDataRefresh();
+  const count = cgDataRefresh();
 
   const ui = SpreadsheetApp.getUi();
-  const uiMessage = 'notification';
+  const uiMessage = `Price refresh completed. ${count} coins updated.`;
   ui.alert('Price Refresh Status', uiMessage, ui.ButtonSet.OK);
 }
 

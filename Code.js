@@ -31,42 +31,38 @@ function createTriggers() {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   DEFAULT_SCHEMA: () => (/* binding */ DEFAULT_SCHEMA)
+/* harmony export */   DEFAULT_ORDERED_SCHEMA: () => (/* binding */ DEFAULT_ORDERED_SCHEMA)
 /* harmony export */ });
-const DEFAULT_SCHEMA = [
-    'Id',
-    'Symbol',
-    'Name',
-    'Image',
-    'Current Price',
-    'Market Cap',
-    'Market Cap Rank',
-    'Fully Diluted Valuation',
-    'Total Volume',
-    'High 24h',
-    'Low 24h',
-    'Price Change 24h',
-    'Price Change Percentage 24h',
-    'Market Cap Change 24h',
-    'Market Cap Change Percentage 24h',
-    'Circulating Supply',
-    'Total Supply',
-    'Max Supply',
-    'Ath',
-    'Ath Change Percentage',
-    'Ath Date',
-    'Atl',
-    'Atl Change Percentage',
-    'Atl Date',
-    'Roi',
-    'Last Updated',
-    'Price Change Percentage 1h In Currency',
-    'Price Change Percentage 24h In Currency',
-    'Price Change Percentage 30d In Currency',
-    'Price Change Percentage 7d In Currency',
-    'Roi Times',
-    'Roi Currency',
-    'Roi Percentage',
+const DEFAULT_ORDERED_SCHEMA = [
+    '/id',
+    '/symbol',
+    '/name',
+    '/image',
+    '/currentPrice',
+    '/marketCap',
+    '/marketCapRank',
+    '/fullyDilutedValuation',
+    '/totalVolume',
+    '/high24h',
+    '/low24h',
+    '/marketCapChange24h',
+    '/marketCapChangePercentage24h',
+    '/priceChange24h',
+    '/circulatingSupply',
+    '/totalSupply',
+    '/maxSupply',
+    '/ath',
+    '/athChangePercentage',
+    '/athDate',
+    '/atl',
+    '/atlChangePercentage',
+    '/atlDate',
+    '/priceChangePercentage1h',
+    '/priceChangePercentage24h',
+    '/priceChangePercentage7d',
+    '/priceChangePercentage30d',
+    '/priceChangePercentage1y',
+    '/lastUpdated',
 ];
 
 
@@ -498,39 +494,36 @@ __webpack_require__.r(__webpack_exports__);
  *
  * @return a two-dimensional array containing the data, with the first row containing headers
  **/
-function ImportJSON(url, query = [], parseOptions) {
-    return ImportJSONAdvanced(url, null, query, parseOptions, includeXPath_, defaultTransform_);
+function ImportJSON(url, query = '', parseOptions) {
+    return ImportJSONAdvanced(url, undefined, query, parseOptions, includeXPath_, defaultTransform_);
 }
-function ImportJSONViaPost(url, payload, fetchOptions, query, parseOptions) {
-    const postOptions = parseToObject_(fetchOptions);
-    if (postOptions['method'] === null || postOptions['method'] === undefined) {
-        postOptions['method'] = 'POST';
-    }
-    if (postOptions['payload'] === null || postOptions['payload'] === undefined) {
-        postOptions['payload'] = payload;
-    }
-    if (postOptions['contentType'] === null ||
-        postOptions['contentType'] == undefined) {
-        postOptions['contentType'] = 'application/x-www-form-urlencoded';
-    }
-    convertToBool_(postOptions, 'validateHttpsCertificates');
-    convertToBool_(postOptions, 'useIntranet');
-    convertToBool_(postOptions, 'followRedirects');
-    convertToBool_(postOptions, 'muteHttpExceptions');
-    return ImportJSONAdvanced(url, postOptions, query, parseOptions, includeXPath_, defaultTransform_);
-}
-function ImportJSONAdvanced(url, fetchOptions, query = [], parseOptions, includeFunc, transformFunc) {
-    const jsondata = UrlFetchApp.fetch(url, fetchOptions || {});
+function ImportJSONAdvanced(url, fetchOptions = {}, query = [], parseOptions, includeFunc, transformFunc) {
+    const jsondata = UrlFetchApp.fetch(url, fetchOptions);
     const object = JSON.parse(jsondata.getContentText());
     return parseJSONObject_(object, query, parseOptions, includeFunc, transformFunc);
 }
-function ImportJSONBasicAuth(url, username, password, query, parseOptions) {
-    const encodedAuthInformation = Utilities.base64Encode(username + ':' + password);
-    const header = {
-        headers: { Authorization: 'Basic ' + encodedAuthInformation },
-    };
-    return ImportJSONAdvanced(url, header, query, parseOptions, includeXPath_, defaultTransform_);
-}
+// function ImportJSONBasicAuth(
+//   url: string,
+//   username: string,
+//   password: string,
+//   query: string | string[],
+//   parseOptions: string,
+// ) {
+//   const encodedAuthInformation = Utilities.base64Encode(
+//     username + ':' + password,
+//   );
+//   const header = {
+//     headers: { Authorization: 'Basic ' + encodedAuthInformation },
+//   };
+//   return ImportJSONAdvanced(
+//     url,
+//     header,
+//     query,
+//     parseOptions,
+//     includeXPath_,
+//     defaultTransform_,
+//   );
+// }
 function parseQueryOrOption_(query) {
     if (!query) {
         return [];
@@ -557,6 +550,7 @@ function parseJSONObject_(object, query, options = [], includeFunc, transformFun
         }
     }
     parseData_(headers, data, '', { rowIndex: 1 }, object, queryArray, optionsArray, includeFunc);
+    console.log('data fetched successfully', { headers, rows: data.length });
     parseHeaders_(headers, data);
     transformData_(data, options, transformFunc);
     return hasOption_(options, 'noHeaders')
@@ -661,7 +655,7 @@ function isObjectArray_(test) {
  * Returns true if the given query applies to the given path.
  */
 function includeXPath_(query, path, options) {
-    if (!query) {
+    if (!query || query.length == 0) {
         return true;
     }
     else if (Array.isArray(query)) {
@@ -925,34 +919,69 @@ function getOrCreateSheet(ss, sheetName) {
     return sheet;
 }
 function fetchJSONData(url) {
-    const data = (0,_importjson__WEBPACK_IMPORTED_MODULE_1__.ImportJSON)(url, undefined, 'noTruncate');
+    console.log('fetching data from URL:', url);
+    const data = (0,_importjson__WEBPACK_IMPORTED_MODULE_1__.ImportJSON)(url, undefined, 'noTruncate,rawHeaders');
     if (data && !data.error) {
         return data;
     }
     console.error(data?.error);
     return null;
 }
-function processJSONData(data, index) {
-    const header = data[0];
-    if (!areHeadersValid(header)) {
-        const columnOrder = header.map((h) => _constants__WEBPACK_IMPORTED_MODULE_0__.DEFAULT_SCHEMA.indexOf(h));
-        data = reorderColumns(data, columnOrder);
+function processJSONData(data, fetchId) {
+    const [headers] = data;
+    if (!areHeadersValid(headers)) {
+        data = reorderColumns(data, headers);
     }
-    // Skip the header for all but the first URL
-    return index > 0 ? data.slice(1) : data;
+    else {
+        console.log('valid headers received', { headers });
+    }
+    // Skip the header for all but the first GET
+    return fetchId > 0 ? data.slice(1) : data;
 }
 function areHeadersValid(header) {
-    return JSON.stringify(header) === JSON.stringify(_constants__WEBPACK_IMPORTED_MODULE_0__.DEFAULT_SCHEMA);
+    return JSON.stringify(header) === JSON.stringify(_constants__WEBPACK_IMPORTED_MODULE_0__.DEFAULT_ORDERED_SCHEMA);
 }
-function reorderColumns(data, columnOrder) {
-    return data.map((row) => columnOrder.map((index) => row[index]));
+// todo: renaming column headers would have more sense
+function reorderColumns(data, headers) {
+    // Create a mapping of input header indices to the desired schema indices
+    const headerIndexMap = headers.reduce((map, header, index) => {
+        const targetIndex = _constants__WEBPACK_IMPORTED_MODULE_0__.DEFAULT_ORDERED_SCHEMA.indexOf(header);
+        if (targetIndex !== -1) {
+            map[index] = targetIndex;
+        }
+        else {
+            console.error('Unknown column:', header);
+            map[index] = -1; // Mark invalid headers
+        }
+        return map;
+    }, {});
+    console.log('Header Index Map:', headerIndexMap);
+    // Reorder data rows based on the header index map
+    const reorderedData = data.map((row) => {
+        const reorderedRow = Array(_constants__WEBPACK_IMPORTED_MODULE_0__.DEFAULT_ORDERED_SCHEMA.length).fill('invalid_state');
+        for (const [currentIndex, targetIndex] of Object.entries(headerIndexMap)) {
+            const currentIdx = parseInt(currentIndex, 10);
+            if (targetIndex !== -1) {
+                reorderedRow[targetIndex] = row[currentIdx];
+            }
+        }
+        return reorderedRow;
+    });
+    console.log('Reordered data:', reorderedData.slice(0, 3));
+    return reorderedData;
 }
 function writeDataToSheet(sheet, data, index, rowsPerPage) {
     const startRow = 1 + index * rowsPerPage + (index > 0 ? 1 : 0);
+    console.log('trying to write data to sheet:', {
+        startRow,
+        nbRow: data.length,
+        nbColumn: data[0].length,
+    });
     const range = sheet.getRange(startRow, 1, data.length, data[0].length);
     range.setValues(data);
 }
-const MAX_RETRIES = 3;
+// todo: switch to 3 retries
+const MAX_RETRIES = 1;
 const RETRY_DELAY_MS = 1500;
 function importDataWithRetries(sheet, url, index, rowsPerPage) {
     const attemptImport = (attempt) => {
@@ -983,7 +1012,9 @@ function safeGuardImportJSON(urls = [], sheetName = '', rowsPerPage = 250) {
     urls.forEach((url, index) => {
         if (importDataWithRetries(sheet, url, index, rowsPerPage)) {
             successfulImports++;
+            return;
         }
+        console.error(`Failed to import data from URL: ${url}`);
     });
     return successfulImports;
 }
@@ -1218,13 +1249,13 @@ function cgDataRefresh() {
     const urls = [
         `https://us-central1-cryptofolio-428823.cloudfunctions.net/cryptofolio-get-coins`,
     ];
-    const count = (0,_lib__WEBPACK_IMPORTED_MODULE_1__.safeGuardImportJSON)(urls, 'db_coingecko_2');
+    const count = (0,_lib__WEBPACK_IMPORTED_MODULE_1__.safeGuardImportJSON)(urls, 'db_coingecko');
     return count;
 }
 function cgDataManualRefresh() {
-    cgDataRefresh();
+    const count = cgDataRefresh();
     const ui = SpreadsheetApp.getUi();
-    const uiMessage = 'notification';
+    const uiMessage = `Price refresh completed. ${count} coins updated.`;
     ui.alert('Price Refresh Status', uiMessage, ui.ButtonSet.OK);
 }
 function testDiscord() {

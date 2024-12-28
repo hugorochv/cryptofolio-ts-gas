@@ -73,51 +73,12 @@ type State = { rowIndex: number };
  **/
 export function ImportJSON(
   url: string,
-  query: string | string[] = [],
+  query: string | string[] = '',
   parseOptions: string,
 ) {
   return ImportJSONAdvanced(
     url,
-    null,
-    query,
-    parseOptions,
-    includeXPath_,
-    defaultTransform_,
-  );
-}
-
-function ImportJSONViaPost(
-  url: string,
-  payload: string,
-  fetchOptions: string,
-  query: string,
-  parseOptions: string,
-) {
-  const postOptions = parseToObject_(fetchOptions);
-
-  if (postOptions['method'] === null || postOptions['method'] === undefined) {
-    postOptions['method'] = 'POST';
-  }
-
-  if (postOptions['payload'] === null || postOptions['payload'] === undefined) {
-    postOptions['payload'] = payload;
-  }
-
-  if (
-    postOptions['contentType'] === null ||
-    postOptions['contentType'] == undefined
-  ) {
-    postOptions['contentType'] = 'application/x-www-form-urlencoded';
-  }
-
-  convertToBool_(postOptions, 'validateHttpsCertificates');
-  convertToBool_(postOptions, 'useIntranet');
-  convertToBool_(postOptions, 'followRedirects');
-  convertToBool_(postOptions, 'muteHttpExceptions');
-
-  return ImportJSONAdvanced(
-    url,
-    postOptions,
+    undefined,
     query,
     parseOptions,
     includeXPath_,
@@ -127,15 +88,15 @@ function ImportJSONViaPost(
 
 function ImportJSONAdvanced(
   url: string,
-  fetchOptions: GoogleAppsScript.URL_Fetch.URLFetchRequestOptions | null,
+  fetchOptions: GoogleAppsScript.URL_Fetch.URLFetchRequestOptions = {},
   query: string | string[] = [],
   parseOptions: string,
   includeFunc: IncludeFunc,
   transformFunc: TransformFunc,
 ) {
-  const jsondata = UrlFetchApp.fetch(url, fetchOptions || {});
-  const object = JSON.parse(jsondata.getContentText());
+  const jsondata = UrlFetchApp.fetch(url, fetchOptions);
 
+  const object = JSON.parse(jsondata.getContentText());
   return parseJSONObject_(
     object,
     query,
@@ -145,28 +106,28 @@ function ImportJSONAdvanced(
   );
 }
 
-function ImportJSONBasicAuth(
-  url: string,
-  username: string,
-  password: string,
-  query: string | string[],
-  parseOptions: string,
-) {
-  const encodedAuthInformation = Utilities.base64Encode(
-    username + ':' + password,
-  );
-  const header = {
-    headers: { Authorization: 'Basic ' + encodedAuthInformation },
-  };
-  return ImportJSONAdvanced(
-    url,
-    header,
-    query,
-    parseOptions,
-    includeXPath_,
-    defaultTransform_,
-  );
-}
+// function ImportJSONBasicAuth(
+//   url: string,
+//   username: string,
+//   password: string,
+//   query: string | string[],
+//   parseOptions: string,
+// ) {
+//   const encodedAuthInformation = Utilities.base64Encode(
+//     username + ':' + password,
+//   );
+//   const header = {
+//     headers: { Authorization: 'Basic ' + encodedAuthInformation },
+//   };
+//   return ImportJSONAdvanced(
+//     url,
+//     header,
+//     query,
+//     parseOptions,
+//     includeXPath_,
+//     defaultTransform_,
+//   );
+// }
 
 function parseQueryOrOption_(query?: string | string[]): string[] {
   if (!query) {
@@ -216,6 +177,9 @@ function parseJSONObject_(
     optionsArray,
     includeFunc,
   );
+
+  console.log('data fetched successfully', { headers, rows: data.length });
+
   parseHeaders_(headers, data);
   transformData_(data, options, transformFunc);
 
@@ -374,7 +338,7 @@ function includeXPath_(
   path: string,
   options: string,
 ) {
-  if (!query) {
+  if (!query || query.length == 0) {
     return true;
   } else if (Array.isArray(query)) {
     for (let i = 0; i < query.length; i++) {

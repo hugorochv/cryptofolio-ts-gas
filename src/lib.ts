@@ -2,7 +2,7 @@
  * @OnlyCurrentDoc
  */
 
-import { DEFAULT_SCHEMA } from './constants';
+import { DEFAULT_ORDERED_SCHEMA } from './constants';
 import { Cell, DataRange, ImportJSON } from './importjson';
 
 export function sortBy(arr: any[], key: string, desc = true) {
@@ -133,7 +133,8 @@ function getOrCreateSheet(
 }
 
 function fetchJSONData(url: string) {
-  const data = ImportJSON(url, undefined, 'noTruncate');
+  console.log('fetching data from URL:', url);
+  const data = ImportJSON(url, undefined, 'noTruncate,rawHeaders');
   if (data && !(data as unknown as any).error) {
     return data;
   }
@@ -142,24 +143,54 @@ function fetchJSONData(url: string) {
   return null;
 }
 
-function processJSONData(data: DataRange, index: number) {
-  const header = data[0];
+function processJSONData(data: DataRange, fetchId: number) {
+  const [headers] = data;
 
-  if (!areHeadersValid(header)) {
-    const columnOrder = header.map((h) => DEFAULT_SCHEMA.indexOf(h as string));
-    data = reorderColumns(data, columnOrder);
+  if (!areHeadersValid(headers)) {
+    data = reorderColumns(data, headers);
+  } else {
+    console.log('valid headers received', { headers });
   }
 
-  // Skip the header for all but the first URL
-  return index > 0 ? data.slice(1) : data;
+  // Skip the header for all but the first GET
+  return fetchId > 0 ? data.slice(1) : data;
 }
 
 function areHeadersValid(header: Cell[]) {
-  return JSON.stringify(header) === JSON.stringify(DEFAULT_SCHEMA);
+  return JSON.stringify(header) === JSON.stringify(DEFAULT_ORDERED_SCHEMA);
 }
 
-function reorderColumns(data: DataRange, columnOrder: number[]) {
-  return data.map((row) => columnOrder.map((index) => row[index]));
+// todo: renaming column headers would have more sense
+function reorderColumns(data: DataRange, headers: Cell[]): DataRange {
+  const headerIndexMap = headers.reduce(
+    (map, header, index) => {
+      const targetIndex = DEFAULT_ORDERED_SCHEMA.indexOf(header as string);
+      if (targetIndex !== -1) {
+        map[index] = targetIndex;
+      } else {
+        console.error('Unknown column:', header);
+        map[index] = -1;
+      }
+      return map;
+    },
+    {} as Record<number, number>,
+  );
+
+  const reorderedData: DataRange = data.map((row) => {
+    const reorderedRow: Cell[] = Array(DEFAULT_ORDERED_SCHEMA.length).fill(
+      'invalid_state',
+    );
+
+    for (const [currentIndex, targetIndex] of Object.entries(headerIndexMap)) {
+      const currentIdx = parseInt(currentIndex, 10);
+      if (targetIndex !== -1) {
+        reorderedRow[targetIndex] = row[currentIdx];
+      }
+    }
+    return reorderedRow;
+  });
+
+  return reorderedData;
 }
 
 function writeDataToSheet(
@@ -169,11 +200,17 @@ function writeDataToSheet(
   rowsPerPage: number,
 ) {
   const startRow = 1 + index * rowsPerPage + (index > 0 ? 1 : 0);
+  console.log('trying to write data to sheet:', {
+    startRow,
+    nbRow: data.length,
+    nbColumn: data[0].length,
+  });
   const range = sheet.getRange(startRow, 1, data.length, data[0].length);
   range.setValues(data);
 }
 
-const MAX_RETRIES = 3;
+// todo: switch to 3 retries
+const MAX_RETRIES = 1;
 const RETRY_DELAY_MS = 1500;
 
 function importDataWithRetries(
@@ -218,7 +255,9 @@ export function safeGuardImportJSON(
   urls.forEach((url, index) => {
     if (importDataWithRetries(sheet, url, index, rowsPerPage)) {
       successfulImports++;
+      return;
     }
+    console.error(`Failed to import data from URL: ${url}`);
   });
 
   return successfulImports;
