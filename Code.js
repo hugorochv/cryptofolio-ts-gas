@@ -1,3 +1,5 @@
+function appendCryptoToMarketSheet() {
+}
 function getDLCrypto() {
 }
 function getTemplatePayload() {
@@ -19,6 +21,8 @@ function onEdit() {
 function onOpen() {
 }
 function createTriggers() {
+}
+function promptForToken() {
 }/******/ (() => { // webpackBootstrap
 /******/ 	"use strict";
 /******/ 	var __webpack_modules__ = ({
@@ -34,35 +38,35 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   DEFAULT_ORDERED_SCHEMA: () => (/* binding */ DEFAULT_ORDERED_SCHEMA)
 /* harmony export */ });
 const DEFAULT_ORDERED_SCHEMA = [
-    '/id',
-    '/symbol',
-    '/name',
-    '/image',
-    '/currentPrice',
-    '/marketCap',
-    '/marketCapRank',
-    '/fullyDilutedValuation',
-    '/totalVolume',
-    '/high24h',
-    '/low24h',
-    '/marketCapChange24h',
-    '/marketCapChangePercentage24h',
-    '/priceChange24h',
-    '/circulatingSupply',
-    '/totalSupply',
-    '/maxSupply',
-    '/ath',
-    '/athChangePercentage',
-    '/athDate',
-    '/atl',
-    '/atlChangePercentage',
-    '/atlDate',
-    '/priceChangePercentage1h',
-    '/priceChangePercentage24h',
-    '/priceChangePercentage7d',
-    '/priceChangePercentage30d',
-    '/priceChangePercentage1y',
-    '/lastUpdated',
+    '/data/id',
+    '/data/symbol',
+    '/data/name',
+    '/data/image',
+    '/data/currentPrice',
+    '/data/marketCap',
+    '/data/marketCapRank',
+    '/data/fullyDilutedValuation',
+    '/data/totalVolume',
+    '/data/high24h',
+    '/data/low24h',
+    '/data/marketCapChange24h',
+    '/data/marketCapChangePercentage24h',
+    '/data/priceChange24h',
+    '/data/circulatingSupply',
+    '/data/totalSupply',
+    '/data/maxSupply',
+    '/data/ath',
+    '/data/athChangePercentage',
+    '/data/athDate',
+    '/data/atl',
+    '/data/atlChangePercentage',
+    '/data/atlDate',
+    '/data/priceChangePercentage1h',
+    '/data/priceChangePercentage24h',
+    '/data/priceChangePercentage7d',
+    '/data/priceChangePercentage30d',
+    '/data/priceChangePercentage1y',
+    '/data/lastUpdated',
 ];
 
 
@@ -437,7 +441,8 @@ function discordTMPL_dailyPortfolio(dl) {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   ImportJSON: () => (/* binding */ ImportJSON)
+/* harmony export */   ImportJSON: () => (/* binding */ ImportJSON),
+/* harmony export */   ImportJSONBearerAuth: () => (/* binding */ ImportJSONBearerAuth)
 /* harmony export */ });
 /*====================================================================================================================================*
   ImportJSON by Brad Jasper and Trevor Lohrbeer
@@ -499,31 +504,21 @@ function ImportJSON(url, query = '', parseOptions) {
 }
 function ImportJSONAdvanced(url, fetchOptions = {}, query = [], parseOptions, includeFunc, transformFunc) {
     const jsondata = UrlFetchApp.fetch(url, fetchOptions);
+    const httpCode = jsondata.getResponseCode();
+    if (httpCode !== 200) {
+        throw new Error(`error fetching data with status code: ${httpCode}`);
+        return;
+    }
     const object = JSON.parse(jsondata.getContentText());
     return parseJSONObject_(object, query, parseOptions, includeFunc, transformFunc);
 }
-// function ImportJSONBasicAuth(
-//   url: string,
-//   username: string,
-//   password: string,
-//   query: string | string[],
-//   parseOptions: string,
-// ) {
-//   const encodedAuthInformation = Utilities.base64Encode(
-//     username + ':' + password,
-//   );
-//   const header = {
-//     headers: { Authorization: 'Basic ' + encodedAuthInformation },
-//   };
-//   return ImportJSONAdvanced(
-//     url,
-//     header,
-//     query,
-//     parseOptions,
-//     includeXPath_,
-//     defaultTransform_,
-//   );
-// }
+function ImportJSONBearerAuth(url, apiKey, query, parseOptions) {
+    const options = {
+        muteHttpExceptions: true,
+        headers: { Authorization: `Bearer ${apiKey}` },
+    };
+    return ImportJSONAdvanced(url, options, query, parseOptions, includeXPath_, defaultTransform_);
+}
 function parseQueryOrOption_(query) {
     if (!query) {
         return [];
@@ -918,14 +913,12 @@ function getOrCreateSheet(ss, sheetName) {
     }
     return sheet;
 }
-function fetchJSONData(url) {
+function fetchJSONData(url, apiKey) {
     console.log('fetching data from URL:', url);
-    const data = (0,_importjson__WEBPACK_IMPORTED_MODULE_1__.ImportJSON)(url, undefined, 'noTruncate,rawHeaders');
+    const data = (0,_importjson__WEBPACK_IMPORTED_MODULE_1__.ImportJSONBearerAuth)(url, apiKey, '/data', 'noTruncate,rawHeaders');
     if (data && !data.error) {
         return data;
     }
-    console.error(data?.error);
-    return null;
 }
 function processJSONData(data, fetchId) {
     const [headers] = data;
@@ -943,7 +936,6 @@ function areHeadersValid(header) {
 }
 // todo: renaming column headers would have more sense
 function reorderColumns(data, headers) {
-    // Create a mapping of input header indices to the desired schema indices
     const headerIndexMap = headers.reduce((map, header, index) => {
         const targetIndex = _constants__WEBPACK_IMPORTED_MODULE_0__.DEFAULT_ORDERED_SCHEMA.indexOf(header);
         if (targetIndex !== -1) {
@@ -951,12 +943,10 @@ function reorderColumns(data, headers) {
         }
         else {
             console.error('Unknown column:', header);
-            map[index] = -1; // Mark invalid headers
+            map[index] = -1;
         }
         return map;
     }, {});
-    console.log('Header Index Map:', headerIndexMap);
-    // Reorder data rows based on the header index map
     const reorderedData = data.map((row) => {
         const reorderedRow = Array(_constants__WEBPACK_IMPORTED_MODULE_0__.DEFAULT_ORDERED_SCHEMA.length).fill('invalid_state');
         for (const [currentIndex, targetIndex] of Object.entries(headerIndexMap)) {
@@ -967,7 +957,6 @@ function reorderColumns(data, headers) {
         }
         return reorderedRow;
     });
-    console.log('Reordered data:', reorderedData.slice(0, 3));
     return reorderedData;
 }
 function writeDataToSheet(sheet, data, index, rowsPerPage) {
@@ -978,17 +967,20 @@ function writeDataToSheet(sheet, data, index, rowsPerPage) {
         nbColumn: data[0].length,
     });
     const range = sheet.getRange(startRow, 1, data.length, data[0].length);
+    console.log({ sheet, range });
+    console.log(data.slice(0, 5));
     range.setValues(data);
 }
 // todo: switch to 3 retries
 const MAX_RETRIES = 1;
 const RETRY_DELAY_MS = 1500;
-function importDataWithRetries(sheet, url, index, rowsPerPage) {
+function importDataWithRetries(sheet, apiKey, url, index, rowsPerPage) {
+    console.log('using key:', apiKey);
     const attemptImport = (attempt) => {
         if (attempt >= MAX_RETRIES)
             return false;
         try {
-            const rawData = fetchJSONData(url);
+            const rawData = fetchJSONData(url, apiKey);
             if (!rawData) {
                 console.error(`Failed to fetch valid data from URL: ${url}`);
                 return false;
@@ -998,6 +990,10 @@ function importDataWithRetries(sheet, url, index, rowsPerPage) {
             return true;
         }
         catch (error) {
+            if (error.message.includes('401')) {
+                console.error(`Failed to fetch data: unauthentified`, error.message);
+                throw new Error('unauthentified');
+            }
             console.error(`Attempt ${attempt + 1} failed for URL: ${url}`, error);
             Utilities.sleep(RETRY_DELAY_MS);
             return attemptImport(attempt + 1);
@@ -1005,12 +1001,12 @@ function importDataWithRetries(sheet, url, index, rowsPerPage) {
     };
     return attemptImport(0);
 }
-function safeGuardImportJSON(urls = [], sheetName = '', rowsPerPage = 250) {
+function safeGuardImportJSON(urls = [], apiKey, sheetName = '', rowsPerPage = 250) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = getOrCreateSheet(ss, sheetName);
     let successfulImports = 0;
     urls.forEach((url, index) => {
-        if (importDataWithRetries(sheet, url, index, rowsPerPage)) {
+        if (importDataWithRetries(sheet, apiKey, url, index, rowsPerPage)) {
             successfulImports++;
             return;
         }
@@ -1056,6 +1052,92 @@ function storeRows2Sheet(sourceRange, targetSheetName) {
     }
     return sourceRange;
 }
+
+
+/***/ }),
+
+/***/ "./dist/token.js":
+/*!***********************!*\
+  !*** ./dist/token.js ***!
+  \***********************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   clearToken: () => (/* binding */ clearToken),
+/* harmony export */   getToken: () => (/* binding */ getToken),
+/* harmony export */   storeToken: () => (/* binding */ storeToken),
+/* harmony export */   validateToken: () => (/* binding */ validateToken)
+/* harmony export */ });
+function storeToken(token) {
+    const scriptProperties = PropertiesService.getScriptProperties();
+    scriptProperties.setProperty('API_TOKEN', token);
+    Logger.log('Token stored successfully');
+}
+function getToken() {
+    const scriptProperties = PropertiesService.getScriptProperties();
+    const token = scriptProperties.getProperty('API_TOKEN');
+    if (token) {
+        return token;
+    }
+    Logger.log('No token found');
+    return null;
+}
+function clearToken() {
+    const scriptProperties = PropertiesService.getScriptProperties();
+    scriptProperties.deleteProperty('API_TOKEN');
+    Logger.log('Token cleared');
+}
+function validateToken(promptToken) {
+    const token = promptToken.trim();
+    if (token.length === 0) {
+        return false;
+    }
+    return true;
+}
+
+
+
+/***/ }),
+
+/***/ "./dist/utils.js":
+/*!***********************!*\
+  !*** ./dist/utils.js ***!
+  \***********************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   appendCryptoToMarketSheet: () => (/* binding */ appendCryptoToMarketSheet),
+/* harmony export */   isInRange: () => (/* binding */ isInRange)
+/* harmony export */ });
+function isInRange(col, row, range) {
+    return (col >= range.getColumn() &&
+        col <= range.getLastColumn() &&
+        row >= range.getRow() &&
+        row <= range.getLastRow());
+}
+function appendCryptoToMarketSheet(ss, coin, templateRange) {
+    const sheet = ss.getSheetByName('Market (Mk)');
+    if (!sheet) {
+        return;
+    }
+    const filter = sheet.getFilter();
+    if (filter !== null && typeof filter == 'object') {
+        // todo: remove getrange
+        filter.getRange();
+        filter.remove();
+    }
+    const lastRow = sheet.getLastRow(), lastCol = sheet.getLastColumn();
+    sheet.insertRowsAfter(lastRow, 1);
+    templateRange.copyTo(sheet.getRange(lastRow + 1, 1, 1, lastCol), {
+        contentsOnly: false,
+    });
+    sheet.getRange(lastRow + 1, 3, 1, 1).setValue(coin);
+    ss.setNamedRange('portfolio_detail', sheet.getRange('A13:AA'));
+    ss.getRange('portfolio_detail').createFilter().sort(3, true);
+}
+
 
 
 /***/ })
@@ -1136,6 +1218,7 @@ var __webpack_exports__ = {};
   \***********************/
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   appendCryptoToMarketSheet: () => (/* reexport safe */ _utils__WEBPACK_IMPORTED_MODULE_3__.appendCryptoToMarketSheet),
 /* harmony export */   cgDataManualRefresh: () => (/* binding */ cgDataManualRefresh),
 /* harmony export */   cgDataRefresh: () => (/* binding */ cgDataRefresh),
 /* harmony export */   createTriggers: () => (/* binding */ createTriggers),
@@ -1145,11 +1228,17 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   onEdit: () => (/* binding */ onEdit),
 /* harmony export */   onOpen: () => (/* binding */ onOpen),
 /* harmony export */   postMessageToDiscord: () => (/* reexport safe */ _discord__WEBPACK_IMPORTED_MODULE_0__.postMessageToDiscord),
+/* harmony export */   promptForToken: () => (/* binding */ promptForToken),
 /* harmony export */   storeRows2SheetTrigger: () => (/* binding */ storeRows2SheetTrigger),
 /* harmony export */   testDiscord: () => (/* binding */ testDiscord)
 /* harmony export */ });
 /* harmony import */ var _discord__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./discord */ "./dist/discord.js");
 /* harmony import */ var _lib__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./lib */ "./dist/lib.js");
+/* harmony import */ var _token__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./token */ "./dist/token.js");
+/* harmony import */ var _utils__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./utils */ "./dist/utils.js");
+
+
+
 
 
 
@@ -1160,7 +1249,51 @@ function onOpen() {
         .addItem('Refresh crypto prices', 'cgDataManualRefresh')
         .addItem('Discord - Test connection', 'testDiscord')
         .addItem('Discord - send reporting', 'dailyAlertTrigger')
+        .addItem('Edit API Key', 'promptForToken')
         .addToUi();
+    showTokenDialogz();
+}
+function showTokenDialogz() {
+    const token = (0,_token__WEBPACK_IMPORTED_MODULE_2__.getToken)();
+    // Create an HTML output for the dialog
+    let html = HtmlService.createHtmlOutputFromFile('tokenDialog')
+        .setWidth(400)
+        .setHeight(300);
+    // Pass the token to the HTML template
+    html = html.append(`<script>
+    window.onload = function() {
+      document.getElementById('tokenField').value = '${token}'; // Pre-fill the input field
+    }
+  </script>`);
+    SpreadsheetApp.getUi().showModalDialog(html, 'Enter Token');
+}
+function promptForToken() {
+    const ui = SpreadsheetApp.getUi();
+    let promptTitle = 'New API Token:';
+    let promptMessage = 'Enter your API Token:';
+    const cachedtoken = (0,_token__WEBPACK_IMPORTED_MODULE_2__.getToken)();
+    if (cachedtoken) {
+        const response = ui.alert('API Token already set', 'Do you want to change it?', ui.ButtonSet.YES_NO);
+        if (response === ui.Button.NO) {
+            return;
+        }
+        promptTitle = 'Edit API Token:';
+        promptMessage = `current token: ${cachedtoken}`;
+    }
+    const responseEdit = ui.prompt(promptTitle, promptMessage, ui.ButtonSet.OK_CANCEL);
+    if (responseEdit.getSelectedButton() == ui.Button.OK) {
+        const promptToken = responseEdit.getResponseText();
+        if (!(0,_token__WEBPACK_IMPORTED_MODULE_2__.validateToken)(promptToken)) {
+            ui.alert('Invalid token. Please try again.');
+            return;
+        }
+        (0,_token__WEBPACK_IMPORTED_MODULE_2__.storeToken)(promptToken);
+        if (promptToken !== (0,_token__WEBPACK_IMPORTED_MODULE_2__.getToken)()) {
+            ui.alert('Token not saved. Please try again.');
+            return;
+        }
+        ui.alert('Token saved successfully');
+    }
 }
 function createTriggers() {
     const allTriggers = ScriptApp.getProjectTriggers();
@@ -1188,75 +1321,58 @@ function initTriggers() {
 function onEdit(e) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const ui = SpreadsheetApp.getUi();
-    const sh = ss.getSheetByName('Market (Mk)');
-    if (!sh) {
+    const marketSheet = ss.getSheetByName('Market (Mk)');
+    if (!marketSheet) {
         return;
     }
-    const myRange = ss.getRange('crypto_opes');
-    const existingValues = ss.getRange('crypto_market');
-    const uiFormat = ss.getRange('fiat_currency');
-    const activeSheet = e.source.getActiveSheet();
+    const trxCoinListRange = ss.getRange('crypto_opes');
+    const marketCoinListRange = ss.getRange('crypto_market');
+    const fiatCurrencyRange = ss.getRange('fiat_currency');
+    const templateRange = ss.getRange('template_row_crypto');
+    const currentActiveSheet = e.source.getActiveSheet();
     const row = e.range.getRow();
     const col = e.range.getColumn();
-    if (activeSheet.getName() == 'Settings') {
-        if (col >= uiFormat.getColumn() &&
-            col <= uiFormat.getLastColumn() &&
-            row >= uiFormat.getRow() &&
-            row <= uiFormat.getLastRow()) {
+    if (currentActiveSheet.getName() === 'Settings') {
+        if ((0,_utils__WEBPACK_IMPORTED_MODULE_3__.isInRange)(col, row, fiatCurrencyRange)) {
             (0,_lib__WEBPACK_IMPORTED_MODULE_1__.updateCurrencyFormat)();
         }
     }
-    else if (activeSheet.getName() == 'Transactions (Tx)') {
-        if (col >= myRange.getColumn() &&
-            col <= myRange.getLastColumn() &&
-            row >= myRange.getRow() &&
-            row <= myRange.getLastRow()) {
-            const cellValue = SpreadsheetApp.getActiveSheet()
+    else if (currentActiveSheet.getName() === 'Transactions (Tx)') {
+        if ((0,_utils__WEBPACK_IMPORTED_MODULE_3__.isInRange)(col, row, trxCoinListRange)) {
+            const currentCoin = SpreadsheetApp.getActiveSheet()
                 .getRange(row, col)
                 .getValue()
                 .toUpperCase();
-            const cryptoRange = existingValues.getValues();
-            if (cryptoRange.flat().includes(cellValue) === false) {
-                const choiceBtn = ui.alert(`New Crypto Detected: ${cellValue}`, 'do you want to add it?', ui.ButtonSet.OK_CANCEL);
-                if (choiceBtn == ui.Button.OK) {
-                    const f = sh.getFilter();
-                    if (f != null && typeof f == 'object') {
-                        // todo: remove getrange
-                        f.getRange();
-                        f.remove();
-                    }
-                    const lRow = sh.getLastRow(), lCol = sh.getLastColumn();
-                    const range = ss.getRange('template_row_crypto');
-                    sh.insertRowsAfter(lRow, 1);
-                    range.copyTo(sh.getRange(lRow + 1, 1, 1, lCol), {
-                        contentsOnly: false,
-                    });
-                    sh.getRange(lRow + 1, 3, 1, 1).setValue(cellValue);
-                    ss.setNamedRange('portfolio_detail', sh.getRange('A13:AA'));
-                    ss.getRange('portfolio_detail').createFilter().sort(3, true);
+            const knownCoins = marketCoinListRange.getValues();
+            if (!knownCoins.flat().includes(currentCoin)) {
+                const choiceBtn = ui.alert(`New Crypto Detected: ${currentCoin}`, 'do you want to add it?', ui.ButtonSet.OK_CANCEL);
+                if (choiceBtn === ui.Button.OK) {
+                    (0,_utils__WEBPACK_IMPORTED_MODULE_3__.appendCryptoToMarketSheet)(ss, currentCoin, templateRange);
                 }
             }
         }
     }
 }
 function cgDataRefresh() {
-    let currency = SpreadsheetApp.getActiveSpreadsheet()
-        .getRangeByName('fiat_currency')
+    const apiKey = SpreadsheetApp.getActiveSpreadsheet()
+        .getRangeByName('ApiKey')
         ?.getValue();
-    if (!currency) {
-        currency = 'cad';
-    }
     const urls = [
         `https://us-central1-cryptofolio-428823.cloudfunctions.net/cryptofolio-get-coins`,
     ];
-    const count = (0,_lib__WEBPACK_IMPORTED_MODULE_1__.safeGuardImportJSON)(urls, 'db_coingecko');
-    return count;
+    const successCount = (0,_lib__WEBPACK_IMPORTED_MODULE_1__.safeGuardImportJSON)(urls, apiKey, 'db_coingecko');
+    return successCount;
 }
 function cgDataManualRefresh() {
-    const count = cgDataRefresh();
     const ui = SpreadsheetApp.getUi();
-    const uiMessage = `Price refresh completed. ${count} coins updated.`;
-    ui.alert('Price Refresh Status', uiMessage, ui.ButtonSet.OK);
+    try {
+        cgDataRefresh();
+        const uiMessage = `Price refresh completed.`;
+        ui.alert('Status', uiMessage, ui.ButtonSet.OK);
+    }
+    catch (e) {
+        ui.alert('Error', `Unable to access cryptofolio api. check your api key and try again. ${e}`, ui.ButtonSet.OK);
+    }
 }
 function testDiscord() {
     const ui = SpreadsheetApp.getUi();
@@ -1301,6 +1417,7 @@ function dailyAlertTrigger() {
     (0,_discord__WEBPACK_IMPORTED_MODULE_0__.postMessageToDiscord)(undefined, payload_portfolio);
 }
 
+__webpack_require__.g.appendCryptoToMarketSheet = __webpack_exports__.appendCryptoToMarketSheet;
 __webpack_require__.g.getDLCrypto = __webpack_exports__.getDLCrypto;
 __webpack_require__.g.getTemplatePayload = __webpack_exports__.getTemplatePayload;
 __webpack_require__.g.postMessageToDiscord = __webpack_exports__.postMessageToDiscord;
@@ -1312,6 +1429,7 @@ __webpack_require__.g.cgDataRefresh = __webpack_exports__.cgDataRefresh;
 __webpack_require__.g.onEdit = __webpack_exports__.onEdit;
 __webpack_require__.g.onOpen = __webpack_exports__.onOpen;
 __webpack_require__.g.createTriggers = __webpack_exports__.createTriggers;
+__webpack_require__.g.promptForToken = __webpack_exports__.promptForToken;
 })();
 
 /******/ })()

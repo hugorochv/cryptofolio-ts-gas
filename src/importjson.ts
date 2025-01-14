@@ -95,6 +95,11 @@ function ImportJSONAdvanced(
   transformFunc: TransformFunc,
 ) {
   const jsondata = UrlFetchApp.fetch(url, fetchOptions);
+  const httpCode = jsondata.getResponseCode();
+  if (httpCode !== 200) {
+    throw new Error(`error fetching data with status code: ${httpCode}`);
+    return;
+  }
 
   const object = JSON.parse(jsondata.getContentText());
   return parseJSONObject_(
@@ -106,28 +111,26 @@ function ImportJSONAdvanced(
   );
 }
 
-// function ImportJSONBasicAuth(
-//   url: string,
-//   username: string,
-//   password: string,
-//   query: string | string[],
-//   parseOptions: string,
-// ) {
-//   const encodedAuthInformation = Utilities.base64Encode(
-//     username + ':' + password,
-//   );
-//   const header = {
-//     headers: { Authorization: 'Basic ' + encodedAuthInformation },
-//   };
-//   return ImportJSONAdvanced(
-//     url,
-//     header,
-//     query,
-//     parseOptions,
-//     includeXPath_,
-//     defaultTransform_,
-//   );
-// }
+export function ImportJSONBearerAuth(
+  url: string,
+  apiKey: string,
+  query: string | string[],
+  parseOptions: string,
+) {
+  const options = {
+    muteHttpExceptions: true,
+    headers: { Authorization: `Bearer ${apiKey}` },
+  };
+
+  return ImportJSONAdvanced(
+    url,
+    options,
+    query,
+    parseOptions,
+    includeXPath_,
+    defaultTransform_,
+  );
+}
 
 function parseQueryOrOption_(query?: string | string[]): string[] {
   if (!query) {

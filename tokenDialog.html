@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+  <head>
+    <base target="_top" />
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+        width: 100%;
+      }
+      input {
+        width: 100%;
+        padding: 10px;
+        font-size: 14px;
+        margin: 10px 0;
+      }
+      button {
+        padding: 10px;
+        font-size: 14px;
+        cursor: pointer;
+        width: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Enter or Update API Token</h2>
+    <input type="text" id="tokenField" placeholder="Enter token here" />
+    <button onclick="saveToken()">Save Token</button>
+    <button onclick="google.script.host.close()">Cancel</button>
+
+    <script>
+      // Save the updated token to the script properties when the Save button is clicked
+      function saveToken() {
+        var token = document.getElementById('tokenField').value;
+        if (token) {
+          google.script.run.storeTokenFromDialog(token); // Store the token in PropertiesService
+          google.script.host.close(); // Close the dialog after saving the token
+        } else {
+          alert('Please enter a token.');
+        }
+      }
+    </script>
+  </body>
+</html>

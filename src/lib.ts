@@ -3,7 +3,7 @@
  */
 
 import { DEFAULT_ORDERED_SCHEMA } from './constants';
-import { Cell, DataRange, ImportJSON } from './importjson';
+import { Cell, DataRange, ImportJSONBearerAuth } from './importjson';
 
 export function sortBy(arr: any[], key: string, desc = true) {
   return desc
@@ -132,15 +132,18 @@ function getOrCreateSheet(
   return sheet;
 }
 
-function fetchJSONData(url: string) {
+function fetchJSONData(url: string, apiKey: string) {
   console.log('fetching data from URL:', url);
-  const data = ImportJSON(url, undefined, 'noTruncate,rawHeaders');
+  const data = ImportJSONBearerAuth(
+    url,
+    apiKey,
+    '/data',
+    'noTruncate,rawHeaders',
+  );
+
   if (data && !(data as unknown as any).error) {
     return data;
   }
-
-  console.error((data as unknown as any)?.error);
-  return null;
 }
 
 function processJSONData(data: DataRange, fetchId: number) {
@@ -206,6 +209,8 @@ function writeDataToSheet(
     nbColumn: data[0].length,
   });
   const range = sheet.getRange(startRow, 1, data.length, data[0].length);
+  console.log({ sheet, range });
+  console.log(data.slice(0, 5));
   range.setValues(data);
 }
 
@@ -215,15 +220,17 @@ const RETRY_DELAY_MS = 1500;
 
 function importDataWithRetries(
   sheet: GoogleAppsScript.Spreadsheet.Sheet,
+  apiKey: string,
   url: string,
   index: number,
   rowsPerPage: number,
 ) {
+  console.log('using key:', apiKey);
   const attemptImport = (attempt: number) => {
     if (attempt >= MAX_RETRIES) return false;
 
     try {
-      const rawData = fetchJSONData(url);
+      const rawData = fetchJSONData(url, apiKey);
       if (!rawData) {
         console.error(`Failed to fetch valid data from URL: ${url}`);
         return false;
@@ -232,18 +239,23 @@ function importDataWithRetries(
       const data = processJSONData(rawData, index);
       writeDataToSheet(sheet, data, index, rowsPerPage);
       return true;
-    } catch (error) {
+    } catch (error: any) {
+      if (error.message.includes('401')) {
+        console.error(`Failed to fetch data: unauthentified`, error.message);
+        throw new Error('unauthentified');
+      }
+
       console.error(`Attempt ${attempt + 1} failed for URL: ${url}`, error);
       Utilities.sleep(RETRY_DELAY_MS);
       return attemptImport(attempt + 1);
     }
   };
-
   return attemptImport(0);
 }
 
 export function safeGuardImportJSON(
   urls: string[] = [],
+  apiKey: string,
   sheetName = '',
   rowsPerPage = 250,
 ) {
@@ -253,7 +265,7 @@ export function safeGuardImportJSON(
   let successfulImports = 0;
 
   urls.forEach((url, index) => {
-    if (importDataWithRetries(sheet, url, index, rowsPerPage)) {
+    if (importDataWithRetries(sheet, apiKey, url, index, rowsPerPage)) {
       successfulImports++;
       return;
     }

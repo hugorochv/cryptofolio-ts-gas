@@ -3,13 +3,17 @@ import {
   getDLCrypto,
   getTemplatePayload,
 } from './discord';
+import { DataRange } from './importjson';
 import {
   prepareDataRange,
   safeGuardImportJSON,
   storeRows2Sheet,
   updateCurrencyFormat,
 } from './lib';
+import { getToken, storeToken, validateToken } from './token';
+import { appendCryptoToMarketSheet, isInRange } from './utils';
 
+export { appendCryptoToMarketSheet } from './utils';
 export {
   getDLCrypto,
   getTemplatePayload,
@@ -24,6 +28,72 @@ function onOpen() {
     .addItem('Discord - Test connection', 'testDiscord')
     .addItem('Discord - send reporting', 'dailyAlertTrigger')
     .addToUi();
+
+  showTokenDialogz();
+}
+
+function showTokenDialogz() {
+  const token = getToken();
+
+  // Create an HTML output for the dialog
+  let html = HtmlService.createHtmlOutputFromFile('tokenDialog')
+    .setWidth(400)
+    .setHeight(300);
+
+  // Pass the token to the HTML template
+  html = html.append(`<script>
+    window.onload = function() {
+      document.getElementById('tokenField').value = '${token}'; // Pre-fill the input field
+    }
+  </script>`);
+
+  SpreadsheetApp.getUi().showModalDialog(html, 'Enter Token');
+}
+
+function promptForToken() {
+  const ui = SpreadsheetApp.getUi();
+
+  let promptTitle = 'New API Token';
+  let promptMessage = 'Enter your API Token:';
+
+  const cachedtoken = getToken();
+  if (cachedtoken) {
+    const response = ui.alert(
+      'API Token already set',
+      'Do you want to change it?',
+      ui.ButtonSet.YES_NO,
+    );
+
+    if (response === ui.Button.NO) {
+      return;
+    }
+
+    promptTitle = 'Edit API Token:';
+    promptMessage = `current token: ${cachedtoken}`;
+  }
+
+  const responseEdit = ui.prompt(
+    promptTitle,
+    promptMessage,
+    ui.ButtonSet.OK_CANCEL,
+  );
+
+  if (responseEdit.getSelectedButton() == ui.Button.OK) {
+    const promptToken = responseEdit.getResponseText();
+
+    if (!validateToken(promptToken)) {
+      ui.alert('Invalid token. Please try again.');
+      return;
+    }
+
+    storeToken(promptToken);
+    if (promptToken !== getToken()) {
+      ui.alert('Token not saved. Please try again.');
+      return;
+    }
+
+    ui.alert('Token saved successfully');
+  }
 }
 
 function createTriggers() {
@@ -60,68 +130,42 @@ function onEdit(e: GoogleAppsScript.Events.SheetsOnEdit): void {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const ui = SpreadsheetApp.getUi();
 
-  const sh = ss.getSheetByName('Market (Mk)');
-  if (!sh) {
+  const marketSheet = ss.getSheetByName('Market (Mk)');
+  if (!marketSheet) {
     return;
   }
 
-  const myRange = ss.getRange('crypto_opes');
-  const existingValues = ss.getRange('crypto_market');
-  const uiFormat = ss.getRange('fiat_currency');
+  const trxCoinListRange = ss.getRange('crypto_opes');
+  const marketCoinListRange = ss.getRange('crypto_market');
+  const fiatCurrencyRange = ss.getRange('fiat_currency');
+  const templateRange = ss.getRange('template_row_crypto');
 
-  const activeSheet = e.source.getActiveSheet();
+  const currentActiveSheet = e.source.getActiveSheet();
   const row = e.range.getRow();
   const col = e.range.getColumn();
 
-  if (activeSheet.getName() == 'Settings') {
-    if (
-      col >= uiFormat.getColumn() &&
-      col <= uiFormat.getLastColumn() &&
-      row >= uiFormat.getRow() &&
-      row <= uiFormat.getLastRow()
-    ) {
+  if (currentActiveSheet.getName() === 'Settings') {
+    if (isInRange(col, row, fiatCurrencyRange)) {
       updateCurrencyFormat();
     }
-  } else if (activeSheet.getName() == 'Transactions (Tx)') {
-    if (
-      col >= myRange.getColumn() &&
-      col <= myRange.getLastColumn() &&
-      row >= myRange.getRow() &&
-      row <= myRange.getLastRow()
-    ) {
-      const cellValue = SpreadsheetApp.getActiveSheet()
+  } else if (currentActiveSheet.getName() === 'Transactions (Tx)') {
+    if (isInRange(col, row, trxCoinListRange)) {
+      const currentCoin = SpreadsheetApp.getActiveSheet()
         .getRange(row, col)
         .getValue()
         .toUpperCase();
-      const cryptoRange = existingValues.getValues();
 
-      if (cryptoRange.flat().includes(cellValue) === false) {
+      const knownCoins: DataRange = marketCoinListRange.getValues();
+
+      if (!knownCoins.flat().includes(currentCoin)) {
         const choiceBtn = ui.alert(
-          `New Crypto Detected: ${cellValue}`,
+          `New Crypto Detected: ${currentCoin}`,
           'do you want to add it?',
           ui.ButtonSet.OK_CANCEL,
         );
-        if (choiceBtn == ui.Button.OK) {
-          const f = sh.getFilter();
-          if (f != null && typeof f == 'object') {
-            // todo: remove getrange
-            f.getRange();
-            f.remove();
-          }
 
-          const lRow = sh.getLastRow(),
-            lCol = sh.getLastColumn();
-
-          const range = ss.getRange('template_row_crypto');
-
-          sh.insertRowsAfter(lRow, 1);
-          range.copyTo(sh.getRange(lRow + 1, 1, 1, lCol), {
-            contentsOnly: false,
-          });
-          sh.getRange(lRow + 1, 3, 1, 1).setValue(cellValue);
-
-          ss.setNamedRange('portfolio_detail', sh.getRange('A13:AA'));
-          ss.getRange('portfolio_detail').createFilter().sort(3, true);
+        if (choiceBtn === ui.Button.OK) {
+          appendCryptoToMarketSheet(ss, currentCoin, templateRange);
         }
       }
     }
@@ -129,28 +173,32 @@ function onEdit(e: GoogleAppsScript.Events.SheetsOnEdit): void {
 }
 
 function cgDataRefresh() {
-  let currency = SpreadsheetApp.getActiveSpreadsheet()
-    .getRangeByName('fiat_currency')
+  const apiKey = SpreadsheetApp.getActiveSpreadsheet()
+    .getRangeByName('ApiKey')
     ?.getValue();
-
-  if (!currency) {
-    currency = 'cad';
-  }
 
   const urls = [
     `https://us-central1-cryptofolio-428823.cloudfunctions.net/cryptofolio-get-coins`,
   ];
 
-  const count = safeGuardImportJSON(urls, 'db_coingecko');
-  return count;
+  const successCount = safeGuardImportJSON(urls, apiKey, 'db_coingecko');
+  return successCount;
 }
 
 function cgDataManualRefresh() {
-  const count = cgDataRefresh();
-
   const ui = SpreadsheetApp.getUi();
-  const uiMessage = `Price refresh completed. ${count} coins updated.`;
-  ui.alert('Price Refresh Status', uiMessage, ui.ButtonSet.OK);
+
+  try {
+    cgDataRefresh();
+    const uiMessage = `Price refresh completed.`;
+    ui.alert('Status', uiMessage, ui.ButtonSet.OK);
+  } catch (e: any) {
+    ui.alert(
+      'Error',
+      `Unable to access cryptofolio api. check your api key and try again. ${e}`,
+      ui.ButtonSet.OK,
+    );
+  }
 }
 
 function testDiscord() {
@@ -220,4 +268,5 @@ export {
   onEdit,
   onOpen,
   createTriggers,
+  promptForToken,
 };
